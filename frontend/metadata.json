@@ -1,0 +1,6 @@
+{
+  "name": "AeroTwin Mission Control",
+  "description": "MALE UAV piston powerplant digital twin, real-time magneto & ignition telemetry, what-if fault simulation, historical trend dashboard, and PDF diagnostic reporting.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
