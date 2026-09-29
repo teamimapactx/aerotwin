@@ -11,7 +11,7 @@ WORKDIR /app
 # Step 1: Copy and build the frontend
 COPY frontend/package*.json ./frontend/
 WORKDIR /app/frontend
-RUN npm install
+RUN npm install --legacy-peer-deps
 COPY frontend/ ./
 RUN npm run build
 
