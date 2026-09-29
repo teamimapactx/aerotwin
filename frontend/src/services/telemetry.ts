@@ -4,7 +4,7 @@ export function connectTelemetry(
   onData: (data: any) => void,
   onStatus: (status: "CONNECTING" | "CONNECTED" | "RECONNECTING" | "DISCONNECTED") => void,
 ) {
-  const wsUrl = API_BASE_URL.replace(/^http/, "ws") + "/ws/stream";
+  const baseForWs = API_BASE_URL || window.location.origin; const wsUrl = baseForWs.replace(/^http/, "ws") + "/ws/stream";
   let socket: WebSocket;
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
   let stopped = false;
