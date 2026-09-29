@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>AeroTwin — MALE UAV Engine Digital Twin</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0b0f14; --panel: #131a22; --border: #22303c; --text: #e6edf3;
+    --muted: #7d8b98; --accent: #3ddc97; --warn: #f2b134; --danger: #ef476f;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family: -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { padding:16px 24px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+  header h1 { font-size:18px; margin:0; letter-spacing:0.3px; }
+  header .status { font-size:12px; color:var(--muted); }
+  .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; background:var(--muted); }
+  .dot.live { background:var(--accent); box-shadow:0 0 6px var(--accent); }
+  main { display:grid; grid-template-columns: 280px 1fr; gap:16px; padding:16px 24px; }
+  .panel { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px; }
+  .controls h2, .grid h2 { font-size:13px; text-transform:uppercase; letter-spacing:0.6px; color:var(--muted); margin:0 0 10px; }
+  select, button { width:100%; background:#0e151b; color:var(--text); border:1px solid var(--border); border-radius:6px; padding:8px; font-size:13px; margin-bottom:8px; cursor:pointer; }
+  button.danger { border-color:var(--danger); color:var(--danger); }
+  button.clear { border-color:var(--accent); color:var(--accent); }
+  button:hover { filter:brightness(1.2); }
+  .health-card { text-align:center; padding:20px 0; }
+  .health-num { font-size:44px; font-weight:700; }
+  .health-label { font-size:12px; color:var(--muted); text-transform:uppercase; }
+  .rul { font-size:13px; color:var(--muted); margin-top:6px; }
+  .grid { display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; margin-bottom:16px; }
+  .metric { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:12px 14px; }
+  .metric .label { font-size:11px; color:var(--muted); text-transform:uppercase; }
+  .metric .val { font-size:22px; font-weight:600; margin-top:4px; }
+  .metric.flag { border-color:var(--danger); }
+  .charts { display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
+  .chart-box { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:12px; }
+  .chart-box h3 { font-size:12px; color:var(--muted); margin:0 0 8px; text-transform:uppercase; }
+  canvas { max-height:180px; }
+  .engine-panel { display:grid; grid-template-columns:minmax(220px, 0.9fr) 1.1fr; gap:18px; align-items:center; margin-bottom:16px; }
+  .engine-visual { position:relative; height:190px; overflow:hidden; border:1px solid var(--border); border-radius:8px; background:linear-gradient(145deg, #101820, #0b1117); }
+  .engine-visual::after { content:"AEROPISTON CORE"; position:absolute; right:12px; bottom:10px; color:#46606e; font:600 10px monospace; letter-spacing:1.5px; }
+  .cylinder { position:absolute; left:50%; top:20px; width:76px; height:112px; transform:translateX(-50%); border:3px solid #627685; border-radius:8px 8px 3px 3px; background:repeating-linear-gradient(90deg, #263642 0 6px, #1b2730 6px 10px); }
+  .cylinder::before { content:""; position:absolute; left:50%; top:-12px; width:46px; height:12px; transform:translateX(-50%); border:2px solid #8396a2; border-bottom:0; border-radius:5px 5px 0 0; background:#344752; }
+  .piston { position:absolute; left:50%; top:28px; width:58px; height:25px; transform:translateX(-50%); border:2px solid #bcc8cc; border-radius:4px; background:#8e9ca1; box-shadow:0 0 12px rgba(61,220,151,0.2); transition:top 80ms linear, box-shadow 180ms ease; }
+  .piston::after { content:""; position:absolute; left:50%; top:24px; width:9px; height:72px; transform:translateX(-50%); background:#b2c0c4; }
+  .crank { position:absolute; left:50%; bottom:14px; width:52px; height:22px; transform:translateX(-50%); border:3px solid var(--accent); border-radius:50%; }
+  .crank::after { content:""; position:absolute; left:20px; top:-38px; width:7px; height:40px; background:var(--accent); transform:rotate(28deg); transform-origin:bottom center; }
+  .engine-copy h3 { margin:0 0 6px; font-size:14px; letter-spacing:.4px; }
+  .engine-copy p { margin:0 0 12px; color:var(--muted); font-size:12px; }
+  .engine-status { display:inline-block; margin-bottom:12px; padding:4px 8px; border:1px solid var(--accent); border-radius:4px; color:var(--accent); font-size:10px; letter-spacing:.8px; }
+  .engine-status.warning { border-color:var(--warn); color:var(--warn); }
+  .engine-status.critical { border-color:var(--danger); color:var(--danger); }
+  .ai-prediction { margin:0 0 12px; color:var(--muted); font-size:11px; }
+  .ai-prediction strong { color:var(--text); }
+  .engine-readout { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; }
+  .engine-readout div { border-left:2px solid var(--border); padding-left:9px; }
+  .engine-readout b { display:block; font-size:16px; }
+  .engine-readout span { color:var(--muted); font-size:10px; text-transform:uppercase; }
+  .engine-panel.fault .engine-visual { border-color:var(--danger); }
+  .engine-panel.fault .piston { box-shadow:0 0 16px rgba(239,71,111,0.7); }
+  .alert-banner { display:none; background:rgba(239,71,111,0.12); border:1px solid var(--danger); color:var(--danger); padding:10px 14px; border-radius:8px; margin-bottom:16px; font-size:13px; }
+  .alert-banner.show { display:block; }
+  .contrib { font-size:11px; color:var(--muted); margin-top:8px; }
+  .what-if { margin-top:20px; border-color:#31556a; }
+  .what-if h3, .ops-panel h3 { margin:0 0 10px; font-size:13px; }
+  .what-if label { display:block; color:var(--muted); font-size:11px; margin:9px 0 4px; }
+  .what-if input { width:100%; background:#0e151b; color:var(--text); border:1px solid var(--border); border-radius:6px; padding:8px; font-size:13px; }
+  .what-if button { border-color:#55a6cc; color:#8ed7f5; margin-top:10px; }
+  .what-if-result { color:var(--muted); font-size:11px; line-height:1.45; }
+  .projection-card { display:none; margin-top:14px; padding-top:14px; border-top:1px solid var(--border); }
+  .projection-card.show { display:block; }
+  .projection-title { color:var(--text); font-size:13px; letter-spacing:.4px; text-transform:uppercase; }
+  .projection-rule { height:1px; background:#667078; margin:10px 0 12px; }
+  .projection-table { display:grid; grid-template-columns:1.1fr .8fr .9fr; gap:5px 8px; font-size:11px; }
+  .projection-table span:first-child { color:var(--text); }
+  .projection-table span { color:var(--muted); }
+  .projection-table .projected { color:#dce8ee; }
+  .projection-section { margin-top:16px; color:var(--text); font-size:12px; }
+  .prediction-grid { display:grid; grid-template-columns:1fr 1fr; gap:5px 8px; margin-top:9px; font-size:11px; }
+  .prediction-grid span:nth-child(odd) { color:var(--muted); }
+  .prediction-grid span:nth-child(even) { color:var(--text); }
+  .projection-rul { margin-top:14px; color:var(--text); font-size:12px; }
+  .projection-rul strong { color:var(--warn); font-size:14px; }
+  .projection-reliability { margin-top:14px; color:var(--text); font-size:12px; }
+  .projection-reliability strong { display:block; margin-top:4px; color:var(--danger); font-size:20px; }
+  .projection-recommendation { margin-top:14px; color:var(--muted); font-size:11px; }
+  .projection-recommendation strong { display:block; color:var(--text); font-size:12px; margin-top:4px; }
+  .engine-panel.scenario-stress .engine-visual { border-color:var(--danger); filter:saturate(1.3); }
+  .engine-panel.scenario-stress .piston { box-shadow:0 0 20px rgba(239,71,111,.9); }
+  .engine-panel.scenario-stress .crank { border-color:var(--danger); }
+  .ops-panel { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
+  .reliability-value { color:var(--accent); font-size:30px; font-weight:700; }
+  .maintenance { border-left:3px solid var(--accent); padding-left:10px; font-size:12px; line-height:1.45; }
+  .maintenance.high, .maintenance.critical { border-color:var(--danger); }
+  .maintenance.medium { border-color:var(--warn); }
+  .event-log { max-height:155px; overflow:auto; padding:0; margin:0; list-style:none; }
+  .event-log li { border-top:1px solid var(--border); padding:7px 0; font-size:11px; color:var(--muted); }
+  .event-log li:first-child { border-top:0; }
+  .event-log strong { color:var(--text); font-weight:500; }
+  @media (max-width: 850px) { main { grid-template-columns:1fr; } .engine-panel { grid-template-columns:1fr; } }
+  @media (max-width: 560px) { main { padding:12px; } .grid { grid-template-columns:repeat(2, 1fr); } .charts { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🛩️ AeroTwin — Aero Piston Engine Digital Twin (MALE UAV)</h1>
+  <div class="status"><span class="dot" id="connDot"></span><span id="connText">connecting…</span></div>
+</header>
+
+<main>
+  <div class="panel controls">
+    <h2>Mission Profile</h2>
+    <select id="missionSelect">
+      <option value="nominal_cruise">Design Cruise Altitude (MALE nominal ISR)</option>
+      <option value="high_altitude">Service Ceiling / Extreme Altitude</option>
+      <option value="hot_weather">Hot-Weather Ground Ops / Climb-out</option>
+      <option value="rapid_throttle_transitions">Mission Maneuvering (Rapid Throttle)</option>
+    </select>
+
+    <h2 style="margin-top:20px;">Inject Fault (demo)</h2>
+    <select id="faultSelect">
+      <option value="overheating">Overheating</option>
+      <option value="misfire">Misfire</option>
+      <option value="lubrication_loss">Lubrication Loss</option>
+      <option value="abnormal_vibration">Abnormal Vibration</option>
+      <option value="sensor_drift">Sensor Drift</option>
+    </select>
+    <button class="danger" id="triggerBtn">⚠ Trigger Fault</button>
+    <button class="clear" id="clearBtn">✓ Clear Fault</button>
+
+    <div class="panel health-card" style="margin-top:20px;">
+      <div class="health-label">Engine Health Index</div>
+      <div class="health-num" id="healthNum">--</div>
+      <div class="rul" id="rulText">RUL: --</div>
+    </div>
+
+    <div class="panel what-if">
+      <h3>What-if Scenario</h3>
+      <label for="vibrationDelta">Vibration increase (g)</label>
+      <input id="vibrationDelta" type="number" value="0.8" min="0" max="5" step="0.1">
+      <label for="temperatureDelta">Temperature increase (°C)</label>
+      <input id="temperatureDelta" type="number" value="15" min="0" max="100" step="1">
+      <label for="scenarioHorizon">Projection horizon (seconds)</label>
+      <input id="scenarioHorizon" type="number" value="900" min="60" max="7200" step="60">
+      <button id="whatIfBtn">Run What-if Projection</button>
+      <div class="what-if-result" id="whatIfResult">No scenario run yet.</div>
+      <div class="projection-card show" id="projectionCard">
+        <div class="projection-title">What-if Projection</div>
+        <div class="projection-rule"></div>
+        <div class="projection-table">
+          <span>Parameter</span><span>Current</span><span>Projected</span>
+          <span>Vibration</span><span id="projectionVibrationCurrent">--</span><span class="projected" id="projectionVibration">--</span>
+          <span>Temperature</span><span id="projectionTemperatureCurrent">--</span><span class="projected" id="projectionTemperature">--</span>
+        </div>
+        <div class="projection-section">Projection Horizon: <span id="projectionHorizon">--</span></div>
+        <div class="projection-rule"></div>
+        <div class="projection-section">AI Prediction</div>
+        <div class="prediction-grid">
+          <span>Fault Probability</span><span id="projectionFaultProbability">--</span>
+          <span>Engine Health</span><span id="projectionHealth">--</span>
+          <span>Predicted Fault</span><span id="projectionFault">--</span>
+        </div>
+        <div class="projection-rul">Estimated RUL <strong id="projectionRul">--</strong></div>
+        <div class="projection-reliability">Mission Reliability <strong id="projectionReliability">--</strong></div>
+        <div class="projection-recommendation">Recommendation:<strong id="projectionRecommendation">--</strong></div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="alert-banner" id="alertBanner"></div>
+
+    <div class="grid" id="metricsGrid"></div>
+
+    <section class="panel engine-panel" id="enginePanel">
+      <div class="engine-visual" aria-label="Animated aero piston engine cutaway">
+        <div class="cylinder"><div class="piston" id="piston"></div></div>
+        <div class="crank"></div>
+      </div>
+      <div class="engine-copy">
+        <h3>AeroPiston Engine Core</h3>
+        <p>Live cutaway view of the simulated single-cylinder power unit.</p>
+        <div class="engine-status" id="engineStatus">HEALTHY · NORMAL</div>
+        <div class="ai-prediction" id="aiPrediction">AI fault prediction: --</div>
+        <div class="engine-readout">
+          <div><b id="engineRpm">--</b><span>RPM</span></div>
+          <div><b id="engineTemp">--</b><span>CHT °C</span></div>
+          <div><b id="engineOil">--</b><span>Oil psi</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="ops-panel">
+      <div class="panel">
+        <h3>Mission Reliability</h3>
+        <div class="reliability-value" id="reliabilityValue">--</div>
+        <div class="rul">Current probability-like readiness score</div>
+        <div class="maintenance" id="maintenanceText">Waiting for telemetry…</div>
+      </div>
+      <div class="panel">
+        <h3>Event / History Log</h3>
+        <ul class="event-log" id="eventLog"><li>Waiting for events…</li></ul>
+      </div>
+    </section>
+
+    <div class="charts">
+      <div class="chart-box"><h3>CHT / EGT (°C)</h3><canvas id="chTemp"></canvas></div>
+      <div class="chart-box"><h3>Oil Pressure (psi) / Oil Temp (°C)</h3><canvas id="chOil"></canvas></div>
+      <div class="chart-box"><h3>Vibration (g RMS)</h3><canvas id="chVib"></canvas></div>
+      <div class="chart-box"><h3>Health Index</h3><canvas id="chHealth"></canvas></div>
+    </div>
+  </div>
+</main>
+
+<script>
+const MAX_POINTS = 90;
+const buffers = { t: [], cht: [], egt: [], oilP: [], oilT: [], vib: [], health: [] };
+
+function pushCap(arr, v) { arr.push(v); if (arr.length > MAX_POINTS) arr.shift(); }
+
+function mkChart(ctx, datasets, yTitle) {
+  return new Chart(ctx, {
+    type: 'line',
+    data: { labels: [], datasets },
+    options: {
+      animation: false, responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { display:false },
+        y: { title:{display:true, text:yTitle, color:'#7d8b98'}, ticks:{color:'#7d8b98'}, grid:{color:'#22303c'} }
+      },
+      plugins: { legend: { labels:{color:'#e6edf3', boxWidth:10, font:{size:10}} } }
+    }
+  });
+}
+
+const chTemp = mkChart(document.getElementById('chTemp'), [
+  { label:'CHT', data:[], borderColor:'#f2b134', tension:0.3, pointRadius:0 },
+  { label:'EGT', data:[], borderColor:'#ef476f', tension:0.3, pointRadius:0 },
+], '°C');
+
+const chOil = mkChart(document.getElementById('chOil'), [
+  { label:'Oil Pressure', data:[], borderColor:'#3ddc97', tension:0.3, pointRadius:0 },
+  { label:'Oil Temp', data:[], borderColor:'#f2b134', tension:0.3, pointRadius:0 },
+], '');
+
+const chVib = mkChart(document.getElementById('chVib'), [
+  { label:'Vibration', data:[], borderColor:'#ef476f', tension:0.3, pointRadius:0 },
+], 'g RMS');
+
+const chHealth = mkChart(document.getElementById('chHealth'), [
+  { label:'Health Index', data:[], borderColor:'#3ddc97', backgroundColor:'rgba(61,220,151,0.1)', fill:true, tension:0.3, pointRadius:0 },
+], '%');
+
+function updateChart(chart, labels, seriesArrays) {
+  chart.data.labels = labels;
+  seriesArrays.forEach((arr, i) => chart.data.datasets[i].data = arr);
+  chart.update('none');
+}
+
+const metricDefs = [
+  { key:'rpm', label:'RPM', fmt:v=>v.toFixed(0) },
+  { key:'cht', label:'CHT °C', fmt:v=>v.toFixed(1) },
+  { key:'egt', label:'EGT °C', fmt:v=>v.toFixed(1) },
+  { key:'oil_pressure', label:'Oil Pressure psi', fmt:v=>v.toFixed(1) },
+  { key:'oil_temp', label:'Oil Temp °C', fmt:v=>v.toFixed(1) },
+  { key:'fuel_flow', label:'Fuel Flow L/h', fmt:v=>v.toFixed(2) },
+  { key:'vibration', label:'Vibration g', fmt:v=>v.toFixed(3) },
+  { key:'battery_v', label:'Battery V', fmt:v=>v.toFixed(2) },
+  { key:'injection_timing', label:'Injection °BTDC', fmt:v=>v.toFixed(2) },
+  { key:'throttle', label:'Throttle %', fmt:v=>(v * 100).toFixed(0) },
+  { key:'engine_load', label:'Engine Load %', fmt:v=>(v * 100).toFixed(0) },
+  { key:'altitude', label:'Altitude ft', fmt:v=>v.toFixed(0) },
+  { key:'ambient_temp', label:'Ambient °C', fmt:v=>v.toFixed(1) },
+  { key:'manifold_pressure', label:'Manifold Pressure', fmt:v=>v.toFixed(1) },
+  { key:'air_fuel_ratio', label:'Air/Fuel Ratio', fmt:v=>v.toFixed(1) },
+  { key:'fault_probability', label:'Fault Probability %', fmt:v=>(v * 100).toFixed(0) },
+  { key:'rul_hours', label:'Simulator RUL h', fmt:v=>v.toFixed(1) },
+];
+const grid = document.getElementById('metricsGrid');
+metricDefs.forEach(m => {
+  const div = document.createElement('div');
+  div.className = 'metric';
+  div.id = 'metric-' + m.key;
+  div.innerHTML = `<div class="label">${m.label}</div><div class="val">--</div>`;
+  grid.appendChild(div);
+});
+
+function render(row) {
+  pushCap(buffers.t, row.t);
+  pushCap(buffers.cht, row.cht);
+  pushCap(buffers.egt, row.egt);
+  pushCap(buffers.oilP, row.oil_pressure);
+  pushCap(buffers.oilT, row.oil_temp);
+  pushCap(buffers.vib, row.vibration);
+  pushCap(buffers.health, row.health_index);
+
+  updateChart(chTemp, buffers.t, [buffers.cht, buffers.egt]);
+  updateChart(chOil, buffers.t, [buffers.oilP, buffers.oilT]);
+  updateChart(chVib, buffers.t, [buffers.vib]);
+  updateChart(chHealth, buffers.t, [buffers.health]);
+
+  metricDefs.forEach(m => {
+    document.querySelector(`#metric-${m.key} .val`).textContent = m.fmt(row[m.key]);
+    document.querySelector(`#metric-${m.key}`).classList.toggle('flag',
+      (row.anomaly && row.anomaly.top_contributors && row.anomaly.top_contributors.some(c => c.feature === m.key)) && row.anomaly.is_anomaly);
+  });
+
+  const pistonTravel = 28 + ((Math.sin(row.t * Math.max(1, row.rpm) / 900) + 1) / 2) * 54;
+  document.getElementById('piston').style.top = `${pistonTravel}px`;
+  document.getElementById('engineRpm').textContent = row.rpm.toFixed(0);
+  document.getElementById('engineTemp').textContent = row.cht.toFixed(1);
+  document.getElementById('engineOil').textContent = row.oil_pressure.toFixed(1);
+  document.getElementById('enginePanel').classList.toggle('fault', row.fault_mode !== 'none' || row.health_index < 70);
+  const engineStatus = document.getElementById('engineStatus');
+  engineStatus.textContent = `${row.engine_status || 'HEALTHY'} · ${row.warning_level || 'NORMAL'}`;
+  engineStatus.className = `engine-status ${(row.warning_level || '').toLowerCase()}`;
+  const prediction = row.fault_prediction;
+  document.getElementById('aiPrediction').innerHTML = prediction
+    ? `AI fault prediction: <strong>${prediction.fault.replaceAll('_', ' ')}</strong> (${Math.round(prediction.confidence * 100)}% confidence)`
+    : 'AI fault prediction: --';
+  document.getElementById('reliabilityValue').textContent = `${row.mission_reliability ?? '--'}%`;
+  const maintenance = row.maintenance;
+  const maintenanceEl = document.getElementById('maintenanceText');
+  maintenanceEl.textContent = maintenance ? `${maintenance.priority.toUpperCase()}: ${maintenance.action}` : 'Waiting for telemetry…';
+  maintenanceEl.className = `maintenance ${maintenance ? maintenance.priority : ''}`;
+
+  const healthEl = document.getElementById('healthNum');
+  healthEl.textContent = row.health_index.toFixed(0) + '%';
+  healthEl.style.color = row.health_index > 70 ? '#3ddc97' : row.health_index > 40 ? '#f2b134' : '#ef476f';
+
+  const rulEl = document.getElementById('rulText');
+  if (row.rul_hours !== undefined) {
+    rulEl.textContent = `RUL: ~${row.rul_hours.toFixed(1)} hours`;
+  } else if (row.rul_seconds !== undefined) {
+    rulEl.textContent = row.fault_severity > 0
+      ? `RUL: ~${Math.round(row.rul_seconds)}s to critical`
+      : 'RUL: nominal, no active degradation';
+  }
+
+  const banner = document.getElementById('alertBanner');
+  if (row.fault_mode && row.fault_mode !== 'none') {
+    const top = row.anomaly && row.anomaly.top_contributors
+      ? ` — driven by: ${row.anomaly.top_contributors.map(c => c.feature).join(', ')}`
+      : '';
+    banner.textContent = `⚠ FAULT ACTIVE — ${row.fault_mode.replaceAll('_', ' ')}${top}`;
+    banner.classList.add('show');
+  } else if (row.anomaly && row.anomaly.is_anomaly) {
+    const top = row.anomaly.top_contributors.map(c => c.feature).join(', ');
+    banner.textContent = `⚠ ANOMALY DETECTED — likely fault: ${row.fault_guess.replace('_',' ')} — driven by: ${top} — anomaly score ${row.anomaly.anomaly_score}`;
+    banner.classList.add('show');
+  } else {
+    banner.classList.remove('show');
+  }
+}
+
+let ws;
+function connect() {
+  ws = new WebSocket('ws://localhost:8000/ws/stream');
+  ws.onopen = () => { document.getElementById('connDot').classList.add('live'); document.getElementById('connText').textContent = 'live'; };
+  ws.onclose = () => { document.getElementById('connDot').classList.remove('live'); document.getElementById('connText').textContent = 'reconnecting…'; setTimeout(connect, 1500); };
+  ws.onmessage = (e) => render(JSON.parse(e.data));
+}
+connect();
+
+document.getElementById('missionSelect').onchange = (e) =>
+  fetch(`http://localhost:8000/api/mission/${e.target.value}`, { method:'POST' });
+
+document.getElementById('triggerBtn').onclick = async () => {
+  const f = document.getElementById('faultSelect').value;
+  const response = await fetch(`http://localhost:8000/api/fault/${f}`, { method:'POST' });
+  if (!response.ok) return;
+  const banner = document.getElementById('alertBanner');
+  banner.textContent = `⚠ FAULT ACTIVE — ${f.replaceAll('_', ' ')}`;
+  banner.classList.add('show');
+  document.getElementById('enginePanel').classList.add('fault');
+};
+document.getElementById('clearBtn').onclick = async () => {
+  const response = await fetch('http://localhost:8000/api/fault/clear', { method:'POST' });
+  if (!response.ok) return;
+  document.getElementById('alertBanner').classList.remove('show');
+  document.getElementById('enginePanel').classList.remove('fault', 'scenario-stress');
+  document.getElementById('engineStatus').textContent = 'HEALTHY · NORMAL';
+  document.getElementById('engineStatus').className = 'engine-status';
+  document.getElementById('aiPrediction').textContent = 'AI fault prediction: none (fault cleared)';
+};
+
+async function refreshEvents() {
+  try {
+    const response = await fetch('http://localhost:8000/api/events?last_n=25');
+    const data = await response.json();
+    const log = document.getElementById('eventLog');
+    log.innerHTML = data.events.length
+      ? data.events.map(e => `<li><strong>${new Date(e.timestamp).toLocaleTimeString()} · ${e.kind}</strong><br>${e.message}</li>`).join('')
+      : '<li>No events recorded.</li>';
+  } catch (_) {}
+}
+setInterval(refreshEvents, 5000);
+refreshEvents();
+
+document.getElementById('whatIfBtn').onclick = async () => {
+  const result = document.getElementById('whatIfResult');
+  result.textContent = 'Calculating projection…';
+  try {
+    const response = await fetch('http://localhost:8000/api/what-if', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        vibration_delta: Number(document.getElementById('vibrationDelta').value),
+        temperature_delta: Number(document.getElementById('temperatureDelta').value),
+        horizon_seconds: Number(document.getElementById('scenarioHorizon').value),
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Projection unavailable');
+    const p = data.projection;
+    const current = data.baseline;
+    const projectedFault = p.fault_guess && p.fault_guess !== 'nominal'
+      ? p.fault_guess.replaceAll('_', ' ')
+      : 'No immediate fault predicted';
+    document.getElementById('projectionVibrationCurrent').textContent = `${current.vibration ?? '--'} g`;
+    document.getElementById('projectionVibration').textContent = `${p.vibration} g ↑`;
+    document.getElementById('projectionTemperatureCurrent').textContent = `${current.cht ?? '--'}°C`;
+    document.getElementById('projectionTemperature').textContent = `${p.cht}°C ↑`;
+    document.getElementById('projectionHorizon').textContent = `${data.inputs.horizon_seconds} sec`;
+    document.getElementById('projectionFaultProbability').textContent = `${Math.round((1 - p.mission_reliability / 100) * 100)}%`;
+    document.getElementById('projectionHealth').textContent = `${p.health_index}%`;
+    document.getElementById('projectionFault').textContent = projectedFault;
+    document.getElementById('projectionRul').textContent = `${(p.rul_seconds / 3600).toFixed(1)} hours`;
+    document.getElementById('projectionReliability').textContent = `${p.mission_reliability}%`;
+    document.getElementById('projectionRecommendation').textContent = p.mission_reliability < 60 ? '⚠ RETURN TO BASE' : p.maintenance.action;
+    document.getElementById('projectionCard').classList.add('show');
+    document.getElementById('enginePanel').classList.add('scenario-stress');
+    result.textContent = 'Projection complete. The digital twin is showing the stressed operating state.';
+  } catch (error) {
+    result.textContent = error.message;
+  }
+};
+</script>
+</body>
+</html>
