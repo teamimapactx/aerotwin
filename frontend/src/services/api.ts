@@ -31,4 +31,4 @@ export const getEvents = (lastN = 50) => apiRequest<{ events: any[] }>(`/api/eve
 export const getReliability = () => apiRequest<any>("/api/reliability");
 export const getMissions = () => apiRequest<{ missions: string[]; faults: string[] }>("/api/missions");
 
-export { API_BASE_URL };
+
